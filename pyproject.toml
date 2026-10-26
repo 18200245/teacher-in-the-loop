@@ -40,7 +40,7 @@ test = ["pytest"]
 titl = "titl.__main__:main"
 
 [project.urls]
-"Source" = "https://github.com/MithrilMan/teacher-in-the-loop"
+"Source" = "https://github.com/18200245/teacher-in-the-loop.git"
 "Weights" = "https://huggingface.co/MithrilMan/teacher-in-the-loop"
 
 [build-system]
@@ -49,6 +49,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/titl"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
