@@ -17,7 +17,7 @@ import time
 import numpy as np
 import torch
 
-from .common import Excitation, FixedSource, crop, device, gpu_source_stft, load_rows, load_teacher, run_dir, seed_everything, spec_losses, style
+from .common import Excitation, FixedSource, crop, device, gpu_source_stft, load_rows, load_teacher, pool_dir, run_dir, seed_everything, spec_losses, style
 
 SEG = 64  # frames per crop (1.6 s)
 HEAD_FRAMES = SEG * 120 + 1  # iSTFT head frames for a crop: 2 x 60 upsampling, plus the reflection pad
@@ -57,7 +57,7 @@ def main():
     seed_everything(a.seed)
     _, train = load_rows(a.voice, a.train_rows)
     dec, exc, fixed, cap, pack = teacher_head(a.voice, dev, a.teacher_fp16)
-    out = os.path.join(run_dir(a.voice), "pool")
+    out = pool_dir(a.voice)
     os.makedirs(out, exist_ok=True)
 
     def mm(name, shape, dt):

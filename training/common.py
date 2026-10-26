@@ -43,9 +43,9 @@ def prepare_transformers_for_kokoro():
 
 
 def read_metadata_sentences(metadata_path):
-    """Read text sentences from a pipe-delimited metadata.csv (filename|text)."""
+    """Read text sentences from a pipe-delimited metadata.csv (id_or_filename|text)."""
     texts = []
-    with open(metadata_path, "r", encoding="utf-8") as f:
+    with open(metadata_path, "r", encoding="utf-8-sig") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -63,8 +63,14 @@ def read_metadata_sentences(metadata_path):
 
 def device(name=None):
     name = name or ("cuda" if torch.cuda.is_available() else "cpu")
-    if name == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError("CUDA was requested but is not available")
+    if name == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA was requested but is not available")
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cudnn.benchmark = True
+        if hasattr(torch, "set_float32_matmul_precision"):
+            torch.set_float32_matmul_precision("high")
     return name
 
 
@@ -96,6 +102,7 @@ def teacher_files(voice):
     if VOICES.get(voice) == "vi":
         search_dirs = [
             os.environ.get("TITL_TEACHER_DIR"),
+            "/content/kokoro",
             "/kaggle/working/kokoro",
             r"D:\Contents\Kokoro\kokoro_ngoc_huyen",
         ]
@@ -209,7 +216,28 @@ class Excitation:
 
 # ---------------------------------------------------------------- teacher rows
 def run_dir(voice):
-    return os.path.join("runs", voice)
+    return os.path.join(os.environ.get("TITL_RUNS_DIR", "runs"), voice)
+
+
+def pool_dir(voice):
+    return os.environ.get("TITL_POOL_DIR") or os.path.join(run_dir(voice), "pool")
+
+
+def save_wav(audio_tensor, path):
+    """Save a 1D float [-1, 1] or int16 audio tensor as a 24 kHz 16-bit mono WAV file."""
+    import wave
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    t = audio_tensor.detach().cpu().flatten()
+    if t.dtype == torch.int16:
+        pcm = t.numpy().astype("<i2")
+    else:
+        pcm = (t.clamp(-1.0, 1.0) * 32767.0).to(torch.int16).numpy().astype("<i2")
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes(pcm.tobytes())
 
 
 def load_rows(voice, train_rows=0, keep_audio=False):

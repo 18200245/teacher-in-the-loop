@@ -28,6 +28,7 @@ from .common import (
     read_metadata_sentences,
     run_dir,
     save,
+    save_wav,
     style,
 )
 
@@ -119,6 +120,17 @@ if not os.path.exists(held_path):
         raise ValueError("a held-out sentence was rejected")
     save(held, held_path)
     print(f"{held_path}: {len(held)} sentences, {time.time() - t0:.0f} s", flush=True)
+else:
+    held = torch.load(held_path, weights_only=False)
+
+sdir = os.path.join(out, "samples")
+if not os.path.exists(os.path.join(sdir, "transcripts.txt")):
+    os.makedirs(sdir, exist_ok=True)
+    with open(os.path.join(sdir, "transcripts.txt"), "w", encoding="utf-8") as tf:
+        for idx_s, r_s in enumerate(held):
+            save_wav(r_s["audio"], os.path.join(sdir, f"teacher_{idx_s:03d}.wav"))
+            tf.write(f"teacher_{idx_s:03d}.wav|{r_s['text']}|{r_s['ps']}\n")
+    print(f"Exported {len(held)} held-out WAV audio files to {sdir}", flush=True)
 
 if A.max_train:
     train_texts = train_texts[: A.max_train]

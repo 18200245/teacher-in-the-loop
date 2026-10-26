@@ -22,12 +22,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .common import Excitation, FixedSource, crop, device, full, gpu_source_stft, load_rows, load_teacher, log_json, run_dir, save, seed_everything, spec_losses, style
+from .common import Excitation, FixedSource, crop, device, full, gpu_source_stft, load_rows, load_teacher, log_json, pool_dir, run_dir, save, save_wav, seed_everything, spec_losses, style
 from .student_decoder import StudentDecoder
 
 
 @torch.no_grad()
-def evaluate(model, rows, utmos=None, seed0=1000):
+def evaluate(model, rows, utmos=None, seed0=1000, sample_dir=None, step=0):
     """The decoder alone on held-out sentences (the teacher's features, excitation seed seed0 + row): distance to
     the teacher's waveform, and UTMOS when a predictor is given."""
     model.eval()
@@ -38,6 +38,8 @@ def evaluate(model, rows, utmos=None, seed0=1000):
             asr, F0, N, au = full(r)
             torch.manual_seed(seed0 + i)
             y = model(asr[None].to(dev), F0[None].to(dev), N[None].to(dev)).squeeze().float()
+            if sample_dir and i < 3:
+                save_wav(y, os.path.join(sample_dir, f"step_{step:06d}_sample_{i:02d}.wav"))
             k = min(len(y), len(au))
             lm, ls = spec_losses(y[None, :k], au[None, :k].to(dev))
             acc["mel"].append(lm.item())
@@ -84,7 +86,7 @@ def main():
     if a.on_the_fly:
         print(f"{len(train)} training sentences, rendering teacher targets on-the-fly (0 GB disk pool)", flush=True)
     else:
-        pdir = os.path.join(run_dir(a.voice), "pool")
+        pdir = pool_dir(a.voice)
         meta = json.load(open(os.path.join(pdir, "meta.json")))
         if meta["voice"] != a.voice or meta["n_train"] != len(train):
             raise ValueError(f"the pool was drawn from {meta['n_train']} sentences of {meta['voice']}, not {len(train)} of {a.voice}")
@@ -148,7 +150,7 @@ def main():
         step, rng = ck["step"], ck["rng"]
         print(f"resumed at step {step}", flush=True)
     else:
-        log_json(os.path.join(out, "log.jsonl"), {"step": 0, **evaluate(model, rows, utmos)})
+        log_json(os.path.join(out, "log.jsonl"), {"step": 0, **evaluate(model, rows, utmos, sample_dir=os.path.join(out, "samples"), step=0)})
 
     model.train()
     t0, t_step, acc = time.time(), step, []
@@ -217,7 +219,7 @@ def main():
             print(f"step {step} " + " ".join(f"{n} {v:.4f}" for n, v in zip(names, m))
                   + f" {(time.time() - t0) / (step - t_step):.3f} s/step", flush=True)
         if step % a.every == 0 or step == a.steps:
-            ev = {"step": step, **evaluate(model, rows, utmos)}
+            ev = {"step": step, **evaluate(model, rows, utmos, sample_dir=os.path.join(out, "samples"), step=step)}
             log_json(os.path.join(out, "log.jsonl"), ev)
             print("EVAL", ev, flush=True)
             ck = {"model": model.state_dict(), "opt": opt.state_dict(), "step": step, "rng": rng}
