@@ -125,6 +125,7 @@ def teacher_files(voice):
             cfg = _find_first_existing([
                 env_cfg,
                 os.path.join(d, "config.json"),
+                os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Kokoro-Vietnamese", "training", "config.json")),
             ])
             if mdl and vp:
                 if not cfg:

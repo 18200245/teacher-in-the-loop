@@ -6,7 +6,7 @@ readme = "README.md"
 license = "Apache-2.0"
 authors = [{ name = "Fabio Angela" }]
 # misaki 0.9.4, the version that made the teacher data, supports Python up to 3.12
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "onnxruntime>=1.17",
