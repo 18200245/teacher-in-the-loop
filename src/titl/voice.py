@@ -44,9 +44,9 @@ class Voice:
         self.vocab = load_vocab()
 
     @classmethod
-    def from_pretrained(cls, name: str, *, quantized: bool = True, revision: str = REVISION,
-                        threads: int = 1) -> "Voice":
-        """Download one of the released voices (``af_heart``, ``if_sara``, ``im_nicola``) and load it.
+    def from_pretrained(cls, name: str, *, quantized: bool = True, repo_id: str | None = None,
+                        revision: str | None = None, threads: int = 1) -> "Voice":
+        """Download one of the released voices (``af_heart``, ``if_sara``, ``im_nicola``, ``ngoc_huyen``) and load it.
 
         quantized: the int8 graph (default, about 9 MB) instead of the float32 one (about 33 MB).
         """
@@ -54,7 +54,9 @@ class Voice:
             raise ValueError(f"unknown voice {name!r}; available: {', '.join(VOICES)}")
         from huggingface_hub import hf_hub_download
 
-        path = hf_hub_download(REPO, f"{name}/{INT8_FILE if quantized else FP32_FILE}", revision=revision)
+        target_repo = repo_id or os.environ.get("TITL_HF_REPO", REPO)
+        target_rev = revision if revision is not None else (REVISION if target_repo == REPO else None)
+        path = hf_hub_download(target_repo, f"{name}/{INT8_FILE if quantized else FP32_FILE}", revision=target_rev)
         return cls(path, VOICES[name], threads=threads)
 
     def from_phonemes(self, phonemes: str, speed: float = 1.0) -> np.ndarray:

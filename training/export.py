@@ -19,7 +19,7 @@ import torch.nn.functional as F
 from torch.nn.utils import remove_weight_norm
 from torch.nn.utils.parametrize import is_parametrized, remove_parametrizations
 
-from .common import SR, run_dir
+from .common import SR, VOICES, run_dir
 from .student import TextStudent
 from .student_decoder import load_student_decoder
 
@@ -157,7 +157,21 @@ def main():
     root = run_dir(a.voice)
     out = os.path.join(root, "export")
     os.makedirs(out, exist_ok=True)
-    m = load(a.text or os.path.join(root, "text", "final.pt"), a.decoder or os.path.join(root, "gan3", "final.pt"))
+    text_pt = a.text or os.path.join(root, "text", "final.pt")
+    dec_pt = a.decoder or os.path.join(root, "gan3", "final.pt")
+
+    try:
+        from safetensors.torch import save_file
+
+        ts_raw = torch.load(text_pt, map_location="cpu", weights_only=False)["model"]
+        ds_raw = torch.load(dec_pt, map_location="cpu", weights_only=False)
+        ds_raw = ds_raw["model"] if "model" in ds_raw else ds_raw
+        save_file({k: v.contiguous() for k, v in ts_raw.items()}, os.path.join(out, "text.safetensors"))
+        save_file({k: v.contiguous() for k, v in ds_raw.items()}, os.path.join(out, "decoder.safetensors"))
+    except Exception as e:
+        print(f"Note: could not write safetensors ({e})", flush=True)
+
+    m = load(text_pt, dec_pt)
     held = torch.load(os.path.join(root, "teacher", "heldout.pt"), weights_only=False)[:2]
 
     path = os.path.join(out, "model.onnx")
@@ -184,6 +198,19 @@ def main():
           f"distance {parity['median_log_spectral_distance_db']} dB (float32 reseeded: {parity['baseline_median_log_spectral_distance_db']:.2f} dB)"
           + (" -- gate not met: " + "; ".join(failures) + "; check the int8 graph end to end (eval)" if failures else ""), flush=True)
     json.dump(report, open(os.path.join(out, "export-validation.json"), "w"), indent=1)
+    voice_cfg = {
+        "voice": a.voice,
+        "language": VOICES.get(a.voice, "vi"),
+        "sample_rate": SR,
+        "text_preset": "s+mlp",
+        "decoder_preset": "A",
+        "onnx": {
+            "inputs": {"input_ids": "int64 [1, T]", "speed": "float32 [1]"},
+            "outputs": {"waveform": "float32 [1, N]"},
+            "max_phonemes": 510,
+        },
+    }
+    json.dump(voice_cfg, open(os.path.join(out, "config.json"), "w"), indent=2)
 
 
 if __name__ == "__main__":
